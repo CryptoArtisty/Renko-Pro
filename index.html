@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTF Renko Projection - BTCUSDT</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js">
+    </script>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --panel-bg: #16213e;
+            --text: #e0e0e0;
+            --accent: #4fc3f7;
+            --bull: #00e676;
+            --bear: #ff1744;
+            --border: #2a2a4a;
+            --btn-bg: #1e3a5f;
+            --btn-hover: #2a5080;
+            --armed-buy: #00c853;
+            --armed-sell: #ff3d00;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .header .title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent);
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+        }
+        .header .pair {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #ffd740;
+            background: #2a2a1e;
+            padding: 4px 10px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .controls label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #aaa;
+            white-space: nowrap;
+        }
+        .controls select,
+        .controls input {
+            background: var(--btn-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .controls select:hover,
+        .controls input:hover {
+            border-color: var(--accent);
+            background: var(--btn-hover);
+        }
+        .controls select:focus,
+        .controls input:focus {
+            outline: 1px solid var(--accent);
+            outline-offset: 1px;
+        }
+        .controls input[type="number"] {
+            width: 60px;
+            text-align: center;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 6px 16px;
+            background: #111;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            font-size: 0.78rem;
+            font-weight: 500;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-bull {
+            background: var(--bull);
+            box-shadow: 0 0 8px var(--bull);
+        }
+        .dot-bear {
+            background: var(--bear);
+            box-shadow: 0 0 8px var(--bear);
+        }
+        .dot-neutral {
+            background: #888;
+        }
+        .armed-badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.72rem;
+            letter-spacing: 0.5px;
+        }
+        .armed-buy-badge {
+            background: #1b5e20;
+            color: #69f0ae;
+            animation: pulse-green 1.5s infinite;
+        }
+        .armed-sell-badge {
+            background: #b71c1c;
+            color: #ff8a80;
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-green {
+            0%,
+            100% {
+                box-shadow: 0 0 4px #00e67644;
+            }
+            50% {
+                box-shadow: 0 0 16px #00e676aa;
+            }
+        }
+        @keyframes pulse-red {
+            0%,
+            100% {
+                box-shadow: 0 0 4px #ff174444;
+            }
+            50% {
+                box-shadow: 0 0 16px #ff1744aa;
+            }
+        }
+
+        #chart-container {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+        #chart-container canvas {
+            cursor: crosshair;
+        }
+
+        .legend-overlay {
+            position: absolute;
+            top: 12px;
+            left: 16px;
+            background: rgba(22, 33, 62, 0.9);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.75rem;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .legend-overlay span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .legend-swatch {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+            .controls {
+                gap: 4px;
+            }
+            .status-bar {
+                gap: 8px;
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <span class="title">◈ HTF Renko Projection</span>
+        <span class="pair" id="pair-display">BTCUSDT</span>
+        <div class="controls">
+            <label for="htf-select">HTF:</label>
+            <select id="htf-select" title="Higher Timeframe for Renko">
+                <option value="5">5m</option>
+                <option value="15" selected>15m</option>
+                <option value="30">30m</option>
+            </select>
+            <label for="method-select">Method:</label>
+            <select id="method-select" title="Renko Brick Method">
+                <option value="ATR" selected>ATR</option>
+                <option value="Traditional">Traditional</option>
+            </select>
+            <label for="atr-length" id="atr-label">ATR Len:</label>
+            <input type="number" id="atr-length" value="14" min="1" max="100" title="ATR Length">
+            <label for="brick-size" id="brick-label" style="display:none;">Brick:</label>
+            <input type="number" id="brick-size" value="10" min="0.0001" step="0.1" title="Traditional Brick Size" style="display:none;">
+            <label for="signal-count">Signal Brick #:</label>
+            <input type="number" id="signal-count" value="1" min="1" max="10" title="Signal Renko Brick Number After Color Change">
+        </div>
+    </div>
+
+    <div class="status-bar" id="status-bar">
+        <span class="status-item">Trend: <span id="trend-status">--</span></span>
+        <span class="status-item">Brick Count: <span id="brick-count">0</span></span>
+        <span class="status-item">Ref Level: <span id="ref-level">--</span></span>
+        <span class="status-item">Armed: <span id="armed-status">None</span></span>
+        <span class="status-item">Last Signal: <span id="last-signal">--</span></span>
+        <span class="status-item">WS: <span id="ws-status" style="color:#ff9800;">Connecting...</span></span>
+    </div>
+
+    <div id="chart-container">
+        <div class="legend-overlay" id="legend">
+            <span><span class="legend-swatch" style="background:#00e676;"></span> Bull Renko Brick</span>
+            <span><span class="legend-swatch" style="background:#ff1744;"></span> Bear Renko Brick</span>
+            <span><span style="color:#00e676;font-size:1.2rem;">▲</span> Bull Brick Signal</span>
+            <span><span style="color:#ff1744;font-size:1.2rem;">▼</span> Bear Brick Signal</span>
+            <span><span style="color:#00e676;font-weight:700;">BUY</span> Buy Confirmation</span>
+            <span><span style="color:#ff1744;font-weight:700;">SELL</span> Sell Confirmation</span>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // =====================================================================
+            // CONFIGURATION
+            // =====================================================================
+            const SYMBOL = 'btcusdt';
+            const REST_URL = `https://api.binance.com/api/v3/klines?symbol=${SYMBOL.toUpperCase()}&interval=1m&limit=1000`;
+            const WS_URL = `wss://stream.binance.com:9443/ws/${SYMBOL}@kline_1m`;
+
+            // DOM elements
+            const htfSelect = document.getElementById('htf-select');
+            const methodSelect = document.getElementById('method-select');
+            const atrLengthInput = document.getElementById('atr-length');
+            const brickSizeInput = document.getElementById('brick-size');
+            const atrLabel = document.getElementById('atr-label');
+            const brickLabel = document.getElementById('brick-label');
+            const signalCountInput = document.getElementById('signal-count');
+            const chartContainer = document.getElementById('chart-container');
+            const trendStatus = document.getElementById('trend-status');
+            const brickCountEl = document.getElementById('brick-count');
+            const refLevelEl = document.getElementById('ref-level');
+            const armedStatusEl = document.getElementById('armed-status');
+            const lastSignalEl = document.getElementById('last-signal');
+            const wsStatusEl = document.getElementById('ws-status');
+            const legendEl = document.getElementById('legend');
+
+            // =====================================================================
+            // STATE
+            // =====================================================================
+            let htfMinutes = parseInt(htfSelect.value); // 15 default
+            let renkoMethod = methodSelect.value; // 'ATR' default
+            let atrLength = parseInt(atrLengthInput.value); // 14
+            let traditionalBrickSize = parseFloat(brickSizeInput.value); // 10
+            let signalBrickCount = parseInt(signalCountInput.value); // 1
+
+            let candles1m = []; // {time, open, high, low, close, isClosed}
+            let candlesHTF = []; // {time, open, high, low, close}
+            let renkoBricks = []; // {time, open, high, low, close, direction, brickClose}
+
+            // Renko tracking
+            let lastRenkoDir = 0; // 1=bull, -1=bear, 0=init
+            let bullCount = 0;
+            let bearCount = 0;
+            let bullReversalSeen = false;
+            let bearReversalSeen = false;
+            let bullReferenceClose = null;
+            let bearReferenceClose = null;
+            let buyArmed = false;
+            let sellArmed = false;
+
+            // Chart objects
+            let chart = null;
+            let candleSeries = null;
+            let renkoLineSeries = null;
+            let renkoAreaSeries = null;
+            let markerSeries = null;
+            let renkoPrimitives = [];
+
+            // WebSocket
+            let ws = null;
+            let wsConnected = false;
+            let currentPartial1m = null; // current forming 1m candle
+            let currentPartialHTF = null; // current forming HTF candle
+
+            // =====================================================================
+            // UTILITY FUNCTIONS
+            // =====================================================================
+            function getHTFBucketTime(timestampSec, htfMin) {
+                // Floor timestamp to the HTF bucket start
+                const sec = htfMin * 60;
+                return Math.floor(timestampSec / sec) * sec;
+            }
+
+            function formatPrice(p) {
+                if (p === null || p === undefined || isNaN(p)) return '--';
+                if (p >= 1000) return p.toFixed(1);
+                if (p >= 1) return p.toFixed(2);
+                if (p >= 0.01) return p.toFixed(4);
+                return p.toFixed(6);
+            }
+
+            function formatTime(ts) {
+                const d = new Date(ts * 1000);
+                return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit',
+                second: '2-digit' });
+            }
+
+            // =====================================================================
+            // BUILD HTF CANDLES FROM 1M DATA
+            // =====================================================================
+            function buildHTFCandles(candles1mData, htfMin) {
+                if (candles1mData.length === 0) return [];
+                const htfSec = htfMin * 60;
+                const buckets = {};
+                for (const c of candles1mData) {
+                    const bucketTime = getHTFBucketTime(c.time, htfMin);
+                    if (!buckets[bucketTime]) {
+                        buckets[bucketTime] = {
+                            time: bucketTime,
+                            open: c.open,
+                            high: c.high,
+                            low: c.low,
+                            close: c.close,
+                            count: 1,
+                        };
+                    } else {
+                        const b = buckets[bucketTime];
+                        b.high = Math.max(b.high, c.high);
+                        b.low = Math.min(b.low, c.low);
+                        b.close = c.close;
+                        b.count++;
+                    }
+                }
+                // Sort by time
+                const result = Object.values(buckets).sort((a, b) => a.time - b.time);
+                // Only include complete buckets (those with enough 1m candles or the last one if partial)
+                // For initial load, include all; mark the last as potentially incomplete
+                return result.map(b => ({
+                    time: b.time,
+                    open: b.open,
+                    high: b.high,
+                    low: b.low,
+                    close: b.close,
+                    isComplete: b.count >= htfMin || b.time < getHTFBucketTime(
+                        candles1mData[candles1mData.length - 1].time, htfMin),
+                }));
+            }
+
+            // =====================================================================
+            // ATR CALCULATION ON HTF CANDLES
+            // =====================================================================
+            function calculateATR(htfCandles, length) {
+                if (htfCandles.length < 2) return null;
+                const trValues = [];
+                for (let i = 1; i < htfCandles.length; i++) {
+                    const prev = htfCandles[i - 1];
+                    const curr = htfCandles[i];
+                    const tr = Math.max(
+                        curr.high - curr.low,
+                        Math.abs(curr.high - prev.close),
+                        Math.abs(curr.low - prev.close)
+                    );
+                    trValues.push(tr);
+                }
+                if (trValues.length < length) return null;
+                // Simple moving average of TR
+                const relevantTRs = trValues.slice(-length);
+                const sum = relevantTRs.reduce((a, b) => a + b, 0);
+                return sum / length;
+            }
+
+            // =====================================================================
+            // RENKO BRICK CALCULATION
+            // =====================================================================
+            function calculateRenkoBricks(htfCandles, brickSize, method) {
+                if (htfCandles.length === 0 || brickSize === null || brickSize <= 0) return [];
+                const bricks = [];
+                let baseClose = htfCandles[0].close;
+                // Determine initial direction from first candle
+                let currentDir = htfCandles[0].close >= htfCandles[0].open ? 1 : -1;
+                // Initial brick
+                let brickOpen = baseClose;
+                let brickClose = currentDir === 1 ? baseClose + brickSize : baseClose - brickSize;
+                // Adjust: find actual first brick based on price
+                // For simplicity, seed with the first HTF candle's close and build from there
+                let lastBrickClose = htfCandles[0].close;
+                let lastBrickDir = htfCandles[0].close >= htfCandles[0].open ? 1 : -1;
+                let lastBrickOpen = lastBrickClose - lastBrickDir * brickSize;
+                // Push initial brick
+                bricks.push({
+                    time: htfCandles[0].time,
+                    open: lastBrickOpen,
+                    high: Math.max(lastBrickOpen, lastBrickClose),
+                    low: Math.min(lastBrickOpen, lastBrickClose),
+                    close: lastBrickClose,
+                    direction: lastBrickDir,
+                    brickClose: lastBrickClose,
+                });
+
+                for (let i = 1; i < htfCandles.length; i++) {
+                    const htfClose = htfCandles[i].close;
+                    const htfHigh = htfCandles[i].high;
+                    const htfLow = htfCandles[i].low;
+                    let currentBrickClose = bricks[bricks.length - 1].brickClose;
+                    let currentBrickDir = bricks[bricks.length - 1].direction;
+
+                    // Determine how many bricks to add
+                    let remainingClose = htfClose;
+                    let brickHigh = htfHigh;
+                    let brickLow = htfLow;
+                    let steps = 0;
+                    const maxSteps = 20; // safety limit
+
+                    while (steps < maxSteps) {
+                        const threshold = currentBrickClose + currentBrickDir * brickSize;
+                        const oppositeThreshold = currentBrickClose - currentBrickDir * brickSize;
+
+                        if (currentBrickDir === 1 && remainingClose >= threshold) {
+                            // New bull brick
+                            const newBrickClose = currentBrickClose + brickSize;
+                            bricks.push({
+                                time: htfCandles[i].time,
+                                open: currentBrickClose,
+                                high: newBrickClose,
+                                low: currentBrickClose,
+                                close: newBrickClose,
+                                direction: 1,
+                                brickClose: newBrickClose,
+                            });
+                            currentBrickClose = newBrickClose;
+                            currentBrickDir = 1;
+                            steps++;
+                        } else if (currentBrickDir === -1 && remainingClose <= threshold) {
+                            // New bear brick
+                            const newBrickClose = currentBrickClose - brickSize;
+                            bricks.push({
+                                time: htfCandles[i].time,
+                                open: currentBrickClose,
+                                high: currentBrickClose,
+                                low: newBrickClose,
+                                close: newBrickClose,
+                                direction: -1,
+                                brickClose: newBrickClose,
+                            });
+                            currentBrickClose = newBrickClose;
+                            currentBrickDir = -1;
+                            steps++;
+                        } else if (currentBrickDir === 1 && remainingClose <= oppositeThreshold) {
+                            // Reversal to bear
+                            const newBrickClose = currentBrickClose - brickSize;
+                            bricks.push({
+                                time: htfCandles[i].time,
+                                open: currentBrickClose,
+                                high: currentBrickClose,
+                                low: newBrickClose,
+                                close: newBrickClose,
+                                direction: -1,
+                                brickClose: newBrickClose,
+                            });
+                            currentBrickClose = newBrickClose;
+                            currentBrickDir = -1;
+                            steps++;
+                        } else if (currentBrickDir === -1 && remainingClose >= oppositeThreshold) {
+                            // Reversal to bull
+                            const newBrickClose = currentBrickClose + brickSize;
+                            bricks.push({
+                                time: htfCandles[i].time,
+                                open: currentBrickClose,
+                                high: newBrickClose,
+                                low: currentBrickClose,
+                                close: newBrickClose,
+                                direction: 1,
+                                brickClose: newBrickClose,
+                            });
+                            currentBrickClose = newBrickClose;
+                            currentBrickDir = 1;
+                            steps++;
+                        } else {
+                            // No new brick - update high/low of last brick for wick info
+                            const last = bricks[bricks.length - 1];
+                            last.high = Math.max(last.high, htfHigh);
+                            last.low = Math.min(last.low, htfLow);
+                            break;
+                        }
+                    }
+                }
+                return bricks;
+            }
+
+            // =====================================================================
+            // SIGNAL DETECTION (replicates Pine Script logic)
+            // =====================================================================
+            function processRenkoSignals(bricks, signalCount) {
+                // Reset tracking variables
+                let lrd = 0;
+                let bc = 0;
+                let bec = 0;
+                let brs = false;
+                let bers = false;
+                let brc = null;
+                let beref = null;
+                let ba = false;
+                let sa = false;
+                const signals = []; // {time, type: 'BUY'|'SELL', refClose}
+
+                for (let i = 0; i < bricks.length; i++) {
+                    const brick = bricks[i];
+                    const isBull = brick.direction === 1;
+                    const isNewBrick = (i === 0) || (bricks[i].brickClose !== bricks[i - 1].brickClose);
+
+                    if (isNewBrick || i === 0) {
+                        if (isBull) {
+                            if (lrd === -1) {
+                                brs = true;
+                                bers = false;
+                            }
+                            bc++;
+                            bec = 0;
+                            lrd = 1;
+                        } else {
+                            if (lrd === 1) {
+                                bers = true;
+                                brs = false;
+                            }
+                            bec++;
+                            bc = 0;
+                            lrd = -1;
+                        }
+
+                        // Check for signal brick
+                        const bullSig = isBull && brs && bc === signalCount;
+                        const bearSig = !isBull && bers && bec === signalCount;
+
+                        if (bullSig) {
+                            brc = brick.brickClose;
+                            ba = true;
+                            sa = false;
+                            signals.push({ time: brick.time, type: 'ARM_BUY', refClose: brc, brickClose: brick
+                                    .brickClose });
+                        }
+                        if (bearSig) {
+                            beref = brick.brickClose;
+                            sa = true;
+                            ba = false;
+                            signals.push({ time: brick.time, type: 'ARM_SELL', refClose: beref, brickClose: brick
+                                    .brickClose });
+                        }
+                    }
+                }
+
+                return {
+                    lastRenkoDir: lrd,
+                    bullCount: bc,
+                    bearCount: bec,
+                    bullReversalSeen: brs,
+                    bearReversalSeen: bers,
+                    bullReferenceClose: brc,
+                    bearReferenceClose: beref,
+                    buyArmed: ba,
+                    sellArmed: sa,
+                    signals,
+                };
+            }
+
+            // Check full-body confirmation on a 1m candle
+            function checkFullBodyConfirmation(candle1m, buyArmedLocal, sellArmedLocal, bullRefClose, bearRefClose) {
+                let result = null;
+                if (buyArmedLocal && bullRefClose !== null) {
+                    const fullBodyAbove =
+                        candle1m.open > bullRefClose &&
+                        candle1m.high > bullRefClose &&
+                        candle1m.low > bullRefClose &&
+                        candle1m.close > bullRefClose;
+                    if (fullBodyAbove && candle1m.isClosed) {
+                        result = { type: 'BUY', price: candle1m.close, time: candle1m.time, refClose: bullRefClose };
+                    }
+                }
+                if (sellArmedLocal && bearRefClose !== null && result === null) {
+                    const fullBodyBelow =
+                        candle1m.open < bearRefClose &&
+                        candle1m.high < bearRefClose &&
+                        candle1m.low < bearRefClose &&
+                        candle1m.close < bearRefClose;
+                    if (fullBodyBelow && candle1m.isClosed) {
+                        result = { type: 'SELL', price: candle1m.close, time: candle1m.time, refClose: bearRefClose };
+                    }
+                }
+                return result;
+            }
+
+            // =====================================================================
+            // CHART INITIALIZATION
+            // =====================================================================
+            function initChart() {
+                if (chart) {
+                    chart.remove();
+                    chart = null;
+                }
+                renkoPrimitives = [];
+
+                chart = LightweightCharts.createChart(chartContainer, {
+                    layout: {
+                        background: { type: 'solid', color: '#1a1a2e' },
+                        textColor: '#cccccc',
+                        fontSize: 11,
+                    },
+                    grid: {
+                        vertLines: { color: '#2a2a4a33' },
+                        horzLines: { color: '#2a2a4a33' },
+                    },
+                    crosshair: {
+                        mode: 1,
+                        vertLine: { color: '#4fc3f766', width: 1, style: 2 },
+                        horzLine: { color: '#4fc3f766', width: 1, style: 2 },
+                    },
+                    rightPriceScale: {
+                        borderColor: '#2a2a4a',
+                        scaleMargins: { top: 0.05, bottom: 0.05 },
+                        autoScale: true,
+                    },
+                    timeScale: {
+                        borderColor: '#2a2a4a',
+                        timeVisible: true,
+                        secondsVisible: false,
+                        tickMarkFormatter: (time) => {
+                            const d = new Date(time * 1000);
+                            return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit',
+                                minute: '2-digit' });
+                        },
+                    },
+                    handleScroll: { vertTouchDrag: true, horzTouchDrag: true },
+                    handleScale: { axisPressedMouseMove: true, pinch: true },
+                });
+
+                // Main 1m candlestick series
+                candleSeries = chart.addCandlestickSeries({
+                    upColor: '#26a69a',
+                    downColor: '#ef5350',
+                    borderUpColor: '#26a69a',
+                    borderDownColor: '#ef5350',
+                    wickUpColor: '#26a69a',
+                    wickDownColor: '#ef5350',
+                    priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                });
+
+                // Renko close step line
+                renkoLineSeries = chart.addLineSeries({
+                    color: '#ffd740',
+                    lineWidth: 2,
+                    lineStyle: 0, // solid
+                    priceLineVisible: false,
+                    lastValueVisible: true,
+                    crosshairMarkerVisible: true,
+                    crosshairMarkerRadius: 5,
+                    priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                });
+
+                // Markers for signals
+                markerSeries = chart.addSeries ? null : null;
+                // We'll use setMarkers on candleSeries
+
+                chart.timeScale().fitContent();
+            }
+
+            // =====================================================================
+            // UPDATE RENKO VISUALS
+            // =====================================================================
+            function updateRenkoVisuals(bricks) {
+                // Update renko step line
+                if (renkoLineSeries && bricks.length > 0) {
+                    const lineData = [];
+                    for (let i = 0; i < bricks.length; i++) {
+                        const b = bricks[i];
+                        lineData.push({ time: b.time, value: b.brickClose });
+                    }
+                    // Add current projection
+                    if (bricks.length > 0) {
+                        const lastBrick = bricks[bricks.length - 1];
+                        const now = Math.floor(Date.now() / 1000);
+                        lineData.push({ time: now, value: lastBrick.brickClose });
+                    }
+                    renkoLineSeries.setData(lineData);
+                }
+
+                // Update background trend coloring using primitive rectangles
+                // Remove old primitives
+                if (chart && renkoPrimitives.length > 0) {
+                    // Primitives can't be easily removed in all versions, so we manage via chart recreation if needed
+                    // For simplicity, we use the line series and markers instead
+                }
+
+                // Update markers on candleSeries for brick formations
+                if (candleSeries && bricks.length > 1) {
+                    const markers = [];
+                    for (let i = 1; i < bricks.length; i++) {
+                        const b = bricks[i];
+                        const prevB = bricks[i - 1];
+                        if (b.brickClose !== prevB.brickClose) {
+                            const isBull = b.direction === 1;
+                            markers.push({
+                                time: b.time,
+                                position: isBull ? 'belowBar' : 'aboveBar',
+                                color: isBull ? '#00e676' : '#ff1744',
+                                shape: isBull ? 'arrowUp' : 'arrowDown',
+                                text: isBull ? '🟢' : '🔴',
+                                size: 2,
+                            });
+                        }
+                    }
+                    // Limit markers to last 200
+                    const recentMarkers = markers.slice(-200);
+                    candleSeries.setMarkers(recentMarkers);
+                }
+            }
+
+            // =====================================================================
+            // ADD BUY/SELL SIGNAL MARKERS
+            // =====================================================================
+            function addSignalMarker(signal) {
+                if (!candleSeries) return;
+                const isBuy = signal.type === 'BUY';
+                const existingMarkers = candleSeries.markers ? [] : [];
+                // Create a distinctive marker
+                const marker = {
+                    time: signal.time,
+                    position: isBuy ? 'belowBar' : 'aboveBar',
+                    color: isBuy ? '#00e676' : '#ff1744',
+                    shape: isBuy ? 'arrowUp' : 'arrowDown',
+                    text: isBuy ? 'BUY' : 'SELL',
+                    size: 3,
+                };
+                // Since we can't easily append, we'll store and redraw
+                if (!window._signalMarkers) window._signalMarkers = [];
+                window._signalMarkers.push(marker);
+                // Keep last 50
+                if (window._signalMarkers.length > 50) window._signalMarkers.shift();
+                // Merge with brick markers
+                updateAllMarkers();
+            }
+
+            function updateAllMarkers() {
+                if (!candleSeries) return;
+                const brickMarkers = getBrickMarkers();
+                const sigMarkers = window._signalMarkers || [];
+                const allMarkers = [...brickMarkers, ...sigMarkers].slice(-300);
+                candleSeries.setMarkers(allMarkers);
+            }
+
+            function getBrickMarkers() {
+                if (renkoBricks.length < 2) return [];
+                const markers = [];
+                for (let i = 1; i < renkoBricks.length; i++) {
+                    const b = renkoBricks[i];
+                    const prevB = renkoBricks[i - 1];
+                    if (b.brickClose !== prevB.brickClose) {
+                        markers.push({
+                            time: b.time,
+                            position: b.direction === 1 ? 'belowBar' : 'aboveBar',
+                            color: b.direction === 1 ? '#00e67688' : '#ff174488',
+                            shape: b.direction === 1 ? 'arrowUp' : 'arrowDown',
+                            text: '',
+                            size: 1,
+                        });
+                    }
+                }
+                return markers.slice(-200);
+            }
+
+            // =====================================================================
+            // FULL DATA REFRESH
+            // =====================================================================
+            function fullRecalculation() {
+                if (candles1m.length === 0) return;
+
+                // Build HTF candles
+                candlesHTF = buildHTFCandles(candles1m, htfMinutes);
+
+                // Calculate brick size
+                let brickSize = traditionalBrickSize;
+                if (renkoMethod === 'ATR') {
+                    const atr = calculateATR(candlesHTF, atrLength);
+                    if (atr !== null && atr > 0) {
+                        brickSize = atr;
+                    } else if (candlesHTF.length >= 2) {
+                        // Fallback: use average true range of available data
+                        let sumTR = 0;
+                        let countTR = 0;
+                        for (let i = 1; i < candlesHTF.length; i++) {
+                            const tr = Math.max(
+                                candlesHTF[i].high - candlesHTF[i].low,
+                                Math.abs(candlesHTF[i].high - candlesHTF[i - 1].close),
+                                Math.abs(candlesHTF[i].low - candlesHTF[i - 1].close)
+                            );
+                            sumTR += tr;
+                            countTR++;
+                        }
+                        brickSize = countTR > 0 ? sumTR / countTR : traditionalBrickSize;
+                    }
+                }
+
+                // Calculate Renko bricks
+                renkoBricks = calculateRenkoBricks(candlesHTF, brickSize, renkoMethod);
+
+                // Process signals
+                const signalState = processRenkoSignals(renkoBricks, signalBrickCount);
+                lastRenkoDir = signalState.lastRenkoDir;
+                bullCount = signalState.bullCount;
+                bearCount = signalState.bearCount;
+                bullReversalSeen = signalState.bullReversalSeen;
+                bearReversalSeen = signalState.bearReversalSeen;
+                bullReferenceClose = signalState.bullReferenceClose;
+                bearReferenceClose = signalState.bearReferenceClose;
+                buyArmed = signalState.buyArmed;
+                sellArmed = signalState.sellArmed;
+
+                // Store arm signals for marker display
+                for (const sig of signalState.signals) {
+                    if (!window._armSignals) window._armSignals = [];
+                    // Check if already stored
+                    const exists = window._armSignals.some(s => s.time === sig.time && s.type === sig.type);
+                    if (!exists) {
+                        window._armSignals.push(sig);
+                    }
+                }
+                if (window._armSignals && window._armSignals.length > 100) {
+                    window._armSignals = window._armSignals.slice(-100);
+                }
+
+                // Update chart
+                updateChartData();
+                updateRenkoVisuals(renkoBricks);
+                updateStatusBar(brickSize);
+                updateAllMarkers();
+            }
+
+            function updateChartData() {
+                if (!candleSeries || candles1m.length === 0) return;
+                const data = candles1m.map(c => ({
+                    time: c.time,
+                    open: c.open,
+                    high: c.high,
+                    low: c.low,
+                    close: c.close,
+                }));
+                candleSeries.setData(data);
+                chart.timeScale().fitContent();
+            }
+
+            function updateStatusBar(brickSize) {
+                const trend = lastRenkoDir === 1 ? 'Bullish 🟢' : lastRenkoDir === -1 ? 'Bearish 🔴' : 'Neutral ⚪';
+                trendStatus.textContent = trend;
+                trendStatus.style.color = lastRenkoDir === 1 ? '#00e676' : lastRenkoDir === -1 ? '#ff1744' : '#888';
+
+                const count = lastRenkoDir === 1 ? bullCount : bearCount;
+                brickCountEl.textContent = count;
+
+                const refClose = lastRenkoDir === 1 ? bullReferenceClose : bearReferenceClose;
+                refLevelEl.textContent = refClose !== null ? formatPrice(refClose) : '--';
+
+                let armedText = 'None';
+                let armedClass = '';
+                if (buyArmed) {
+                    armedText = '🔔 BUY ARMED';
+                    armedClass = 'armed-buy-badge';
+                } else if (sellArmed) {
+                    armedText = '🔔 SELL ARMED';
+                    armedClass = 'armed-sell-badge';
+                }
+                armedStatusEl.textContent = armedText;
+                armedStatusEl.className = 'armed-badge ' + armedClass;
+
+                // Update brick size display
+                const bsDisplay = renkoMethod === 'ATR' ?
+                    `ATR(${atrLength}) = ${formatPrice(brickSize)}` :
+                    `Fixed = ${formatPrice(brickSize)}`;
+                document.getElementById('brick-count').title = `Brick Size: ${bsDisplay}`;
+            }
+
+            // =====================================================================
+            // HANDLE NEW 1M CANDLE DATA
+            // =====================================================================
+            function handle1mCandle(candle, isFinal) {
+                const timeSec = Math.floor(candle.time / 1000);
+                const cData = {
+                    time: timeSec,
+                    open: parseFloat(candle.open),
+                    high: parseFloat(candle.high),
+                    low: parseFloat(candle.low),
+                    close: parseFloat(candle.close),
+                    isClosed: isFinal,
+                };
+
+                if (isFinal) {
+                    // Closed candle - add or update
+                    const existingIdx = candles1m.findIndex(c => c.time === timeSec);
+                    if (existingIdx >= 0) {
+                        candles1m[existingIdx] = cData;
+                    } else {
+                        candles1m.push(cData);
+                        // Keep sorted
+                        candles1m.sort((a, b) => a.time - b.time);
+                        // Limit to 2000 candles
+                        if (candles1m.length > 2000) candles1m = candles1m.slice(-2000);
+                    }
+
+                    // Check for signal on this closed candle
+                    const signal = checkFullBodyConfirmation(cData, buyArmed, sellArmed, bullReferenceClose,
+                        bearReferenceClose);
+                    if (signal) {
+                        addSignalMarker(signal);
+                        lastSignalEl.textContent = `${signal.type} @ ${formatPrice(signal.price)} (${formatTime(signal.time)})`;
+                        lastSignalEl.style.color = signal.type === 'BUY' ? '#00e676' : '#ff1744';
+                        // Disarm
+                        if (signal.type === 'BUY') buyArmed = false;
+                        if (signal.type === 'SELL') sellArmed = false;
+                        updateStatusBar(null);
+                    }
+
+                    // Full recalculation on each closed 1m candle
+                    fullRecalculation();
+                } else {
+                    // Partial candle - update current forming candle
+                    currentPartial1m = cData;
+                    // Update the chart with the partial candle
+                    updateChartWithPartial(cData);
+                }
+            }
+
+            function updateChartWithPartial(partialCandle) {
+                if (!candleSeries) return;
+                // Update the last candle in the series
+                const data = candleSeries.data();
+                if (data && data.length > 0) {
+                    const lastData = data[data.length - 1];
+                    if (lastData.time === partialCandle.time) {
+                        // Update existing
+                        candleSeries.update({
+                            time: partialCandle.time,
+                            open: partialCandle.open,
+                            high: partialCandle.high,
+                            low: partialCandle.low,
+                            close: partialCandle.close,
+                        });
+                    } else if (partialCandle.time > lastData.time) {
+                        // Add new partial candle
+                        candleSeries.update({
+                            time: partialCandle.time,
+                            open: partialCandle.open,
+                            high: partialCandle.high,
+                            low: partialCandle.low,
+                            close: partialCandle.close,
+                        });
+                    }
+                }
+                // Also update renko line to current time
+                if (renkoBricks.length > 0 && renkoLineSeries) {
+                    const lastBrick = renkoBricks[renkoBricks.length - 1];
+                    const now = Math.floor(Date.now() / 1000);
+                    try {
+                        renkoLineSeries.update({ time: now, value: lastBrick.brickClose });
+                    } catch (e) {
+                        // Ignore update errors for partial data
+                    }
+                }
+            }
+
+            // =====================================================================
+            // WEBSOCKET CONNECTION
+            // =====================================================================
+            function connectWebSocket() {
+                if (ws) {
+                    try { ws.close(); } catch (e) {}
+                    ws = null;
+                }
+                wsStatusEl.textContent = 'Connecting...';
+                wsStatusEl.style.color = '#ff9800';
+                wsConnected = false;
+
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = () => {
+                    wsConnected = true;
+                    wsStatusEl.textContent = 'Live ✓';
+                    wsStatusEl.style.color = '#00e676';
+                    console.log('WebSocket connected to Binance');
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.e === 'kline') {
+                            const k = msg.k;
+                            const isFinal = k.x; // isFinal flag from Binance
+                            const candle = {
+                                time: k.t,
+                                open: k.o,
+                                high: k.h,
+                                low: k.l,
+                                close: k.c,
+                            };
+                            handle1mCandle(candle, isFinal);
+                        }
+                    } catch (err) {
+                        console.error('WebSocket message parse error:', err);
+                    }
+                };
+
+                ws.onerror = (err) => {
+                    console.error('WebSocket error:', err);
+                    wsStatusEl.textContent = 'Error';
+                    wsStatusEl.style.color = '#ff1744';
+                    wsConnected = false;
+                };
+
+                ws.onclose = (event) => {
+                    wsConnected = false;
+                    wsStatusEl.textContent = 'Disconnected';
+                    wsStatusEl.style.color = '#ff9800';
+                    console.log('WebSocket closed, reconnecting in 3s...');
+                    setTimeout(connectWebSocket, 3000);
+                };
+            }
+
+            // =====================================================================
+            // LOAD HISTORICAL DATA
+            // =====================================================================
+            async function loadHistoricalData() {
+                try {
+                    wsStatusEl.textContent = 'Loading data...';
+                    wsStatusEl.style.color = '#ff9800';
+                    const response = await fetch(REST_URL);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+                    // Parse Binance kline format
+                    const parsed = data.map(k => ({
+                        time: Math.floor(k[0] / 1000),
+                        open: parseFloat(k[1]),
+                        high: parseFloat(k[2]),
+                        low: parseFloat(k[3]),
+                        close: parseFloat(k[4]),
+                        isClosed: true,
+                    }));
+                    candles1m = parsed.sort((a, b) => a.time - b.time);
+                    console.log(`Loaded ${candles1m.length} historical 1m candles`);
+
+                    // Initialize chart if needed
+                    if (!chart) initChart();
+
+                    // Full recalculation
+                    fullRecalculation();
+
+                    // Connect WebSocket after initial load
+                    connectWebSocket();
+                } catch (err) {
+                    console.error('Failed to load historical data:', err);
+                    wsStatusEl.textContent = 'Load Failed';
+                    wsStatusEl.style.color = '#ff1744';
+                    // Retry after delay
+                    setTimeout(loadHistoricalData, 5000);
+                }
+            }
+
+            // =====================================================================
+            // EVENT HANDLERS
+            // =====================================================================
+            htfSelect.addEventListener('change', () => {
+                htfMinutes = parseInt(htfSelect.value);
+                // Reset signal state
+                resetSignalState();
+                fullRecalculation();
+            });
+
+            methodSelect.addEventListener('change', () => {
+                renkoMethod = methodSelect.value;
+                if (renkoMethod === 'ATR') {
+                    atrLabel.style.display = '';
+                    atrLengthInput.style.display = '';
+                    brickLabel.style.display = 'none';
+                    brickSizeInput.style.display = 'none';
+                } else {
+                    atrLabel.style.display = 'none';
+                    atrLengthInput.style.display = 'none';
+                    brickLabel.style.display = '';
+                    brickSizeInput.style.display = '';
+                }
+                resetSignalState();
+                fullRecalculation();
+            });
+
+            atrLengthInput.addEventListener('change', () => {
+                atrLength = Math.max(1, parseInt(atrLengthInput.value) || 14);
+                atrLengthInput.value = atrLength;
+                resetSignalState();
+                fullRecalculation();
+            });
+
+            brickSizeInput.addEventListener('change', () => {
+                traditionalBrickSize = Math.max(0.0001, parseFloat(brickSizeInput.value) || 10);
+                brickSizeInput.value = traditionalBrickSize;
+                resetSignalState();
+                fullRecalculation();
+            });
+
+            signalCountInput.addEventListener('change', () => {
+                signalBrickCount = Math.max(1, parseInt(signalCountInput.value) || 1);
+                signalCountInput.value = signalBrickCount;
+                resetSignalState();
+                fullRecalculation();
+            });
+
+            function resetSignalState() {
+                lastRenkoDir = 0;
+                bullCount = 0;
+                bearCount = 0;
+                bullReversalSeen = false;
+                bearReversalSeen = false;
+                bullReferenceClose = null;
+                bearReferenceClose = null;
+                buyArmed = false;
+                sellArmed = false;
+                window._signalMarkers = [];
+                window._armSignals = [];
+                lastSignalEl.textContent = '--';
+                lastSignalEl.style.color = '#aaa';
+            }
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                if (chart && chartContainer) {
+                    const width = chartContainer.clientWidth;
+                    const height = chartContainer.clientHeight;
+                    chart.applyOptions({ width, height });
+                }
+            });
+
+            // =====================================================================
+            // INITIAL SETUP
+            // =====================================================================
+            function init() {
+                // Set initial UI state
+                if (renkoMethod === 'ATR') {
+                    brickLabel.style.display = 'none';
+                    brickSizeInput.style.display = 'none';
+                } else {
+                    atrLabel.style.display = 'none';
+                    atrLengthInput.style.display = 'none';
+                }
+
+                // Initialize chart
+                initChart();
+
+                // Initialize signal marker storage
+                window._signalMarkers = [];
+                window._armSignals = [];
+
+                // Load data
+                loadHistoricalData();
+
+                // Update pair display
+                document.getElementById('pair-display').textContent = SYMBOL.toUpperCase();
+            }
+
+            // Start
+            init();
+
+            console.log('HTF Renko Projection Indicator initialized.');
+            console.log('Configuration:', {
+                symbol: SYMBOL.toUpperCase(),
+                htfMinutes,
+                renkoMethod,
+                atrLength,
+                traditionalBrickSize,
+                signalBrickCount,
+            });
+            console.log('Chart: 1m candlesticks with HTF Renko overlay');
+            console.log('Data: Binance REST + WebSocket (real-time)');
+        })();
+    </script>
+</body>
+</html>
